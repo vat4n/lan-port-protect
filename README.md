@@ -1,7 +1,4 @@
-# lan-port-protect
-# lan-port-protect
-# lan-port-protect
-# lan-port-protect
+ ##lan-port-protect
 
 `lan-port-protect` — Bash-скрипт для настройки `iptables`, который ограничивает доступ к заданным `TCP`-портам:
 
@@ -23,8 +20,10 @@
 
 ```bash
 sudo ./lan-port-protect.sh {apply|status|rollback}
-
+```
 
 Для автоматического восстановления правил после reboot на Debian/Ubuntu рекомендуется установить:
+```bash
 apt update
 apt install -y iptables-persistent
+```
