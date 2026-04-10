@@ -1,4 +1,4 @@
- ##lan-port-protect
+# lan-port-protect
 
 `lan-port-protect` — Bash-скрипт для настройки `iptables`, который ограничивает доступ к заданным `TCP`-портам:
 
@@ -12,15 +12,20 @@
 
 | Команда | Описание |
 |---|---|
-| `apply` | Применить правила, создать backup и сохранить текущее состояние |
-| `status` | Показать текущее состояние правил |
-| `rollback` | Откатить изменения, восстановив правила из backup |
+| `apply` | Создает backup текущих правил, применяет новые правила и сохраняет итоговое состояние |
+| `status` | Показывает текущее состояние `iptables` и параметры скрипта |
+| `backups` | Показывает список доступных backup-файлов |
+| `rollback` | Восстанавливает правила из последнего backup-файла |
+| `rollback <backup_file>` | Восстанавливает правила из указанного backup-файла |
+
+
 
 Общий синтаксис:
 
 ```bash
-sudo ./lan-port-protect.sh {apply|status|rollback}
+sudo ./lan-port-protect.sh {apply|status|rollback|backups|rollback <backup_file>}
 ```
+
 
 Для автоматического восстановления правил после reboot на Debian/Ubuntu рекомендуется установить:
 ```bash

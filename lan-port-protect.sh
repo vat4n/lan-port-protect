@@ -7,8 +7,8 @@ RULE_COMMENT="lan-port-protect"
 LOG_PREFIX="IPTABLES_WAN_BLOCK: "
 
 LAN_NETS=(
-    "10.151.0.0/24"
-    "10.150.0.0/24"
+    "10.141.0.0/24"
+    "10.140.0.0/24"
 )
 
 PORTS=(
@@ -23,7 +23,7 @@ PORTS=(
 )
 
 BACKUP_DIR="/root/iptables-backups"
-BACKUP_FILE="$BACKUP_DIR/iptables-before-lan-port-protect.rules"
+BACKUP_LATEST_FILE="$BACKUP_DIR/iptables-before-lan-port-protect.latest.rules"
 SAVED_RULES_FILE="/etc/iptables/rules.v4"
 
 PORTS_CSV="$(IFS=,; echo "${PORTS[*]}")"
@@ -40,9 +40,22 @@ ensure_dirs() {
     mkdir -p "$(dirname "$SAVED_RULES_FILE")"
 }
 
+generate_backup_file() {
+    local ts
+    ts="$(date '+%Y-%m-%d_%H-%M-%S')"
+    echo "$BACKUP_DIR/iptables-before-lan-port-protect-${ts}.rules"
+}
+
 backup_current_rules() {
-    echo "Creating backup: $BACKUP_FILE"
-    iptables-save > "$BACKUP_FILE"
+    local backup_file
+    backup_file="$(generate_backup_file)"
+
+    echo "Creating backup: $backup_file"
+    iptables-save > "$backup_file"
+
+    cp -f "$backup_file" "$BACKUP_LATEST_FILE"
+
+    LAST_BACKUP_FILE="$backup_file"
 }
 
 save_current_rules() {
@@ -101,15 +114,8 @@ fill_chain() {
         -j RETURN
 }
 
-remove_managed_rules() {
-    while iptables -C INPUT -p tcp -m multiport --dports "$PORTS_CSV" -j "$CHAIN" 2>/dev/null; do
-        iptables -D INPUT -p tcp -m multiport --dports "$PORTS_CSV" -j "$CHAIN"
-    done
-
-    if iptables -L "$CHAIN" >/dev/null 2>&1; then
-        iptables -F "$CHAIN"
-        iptables -X "$CHAIN"
-    fi
+list_backups() {
+    find "$BACKUP_DIR" -maxdepth 1 -type f -name 'iptables-before-lan-port-protect-*.rules' | sort || true
 }
 
 apply_rules() {
@@ -125,13 +131,15 @@ apply_rules() {
 }
 
 rollback_rules() {
-    if [[ ! -f "$BACKUP_FILE" ]]; then
-        echo "Backup file not found: $BACKUP_FILE"
+    local restore_file="${1:-$BACKUP_LATEST_FILE}"
+
+    if [[ ! -f "$restore_file" ]]; then
+        echo "Backup file not found: $restore_file"
         exit 1
     fi
 
-    echo "Restoring rules from backup: $BACKUP_FILE"
-    iptables-restore < "$BACKUP_FILE"
+    echo "Restoring rules from backup: $restore_file"
+    iptables-restore < "$restore_file"
     save_current_rules
     echo "Rollback completed."
 }
@@ -152,18 +160,36 @@ show_status() {
 
     echo "Managed TCP ports: $PORTS_CSV"
     echo "Allowed LAN subnets: ${LAN_NETS[*]}"
-    echo "Backup file: $BACKUP_FILE"
+    echo "Latest backup file: $BACKUP_LATEST_FILE"
+
+    if [[ -n "${LAST_BACKUP_FILE:-}" ]]; then
+        echo "Current session backup file: $LAST_BACKUP_FILE"
+    fi
+
     echo "Saved rules file: $SAVED_RULES_FILE"
+}
+
+show_backups() {
+    ensure_dirs
+    echo "Available backups:"
+    list_backups
 }
 
 usage() {
     cat <<EOF
-Usage: $0 {apply|rollback|status}
+Usage:
+    $0 apply
+    $0 status
+    $0 backups
+    $0 rollback
+    $0 rollback <backup_file>
 
 Commands:
-    apply       Backup current rules, apply protection rules, save current state
-    rollback    Restore rules from backup and save restored state
-    status      Show current iptables status
+    apply                   Backup current rules, apply protection rules, save current state
+    status                  Show current iptables status
+    backups                 Show available backup files
+    rollback                Restore rules from latest backup
+    rollback <backup_file>  Restore rules from specified backup file
 EOF
 }
 
@@ -176,11 +202,16 @@ main() {
             show_status
             ;;
         rollback)
-            rollback_rules
+            shift || true
+            rollback_rules "${1:-}"
             show_status
             ;;
         status)
+            ensure_dirs
             show_status
+            ;;
+        backups)
+            show_backups
             ;;
         *)
             usage
